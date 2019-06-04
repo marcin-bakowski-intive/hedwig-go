@@ -1,6 +1,6 @@
 # Hedwig Library for Go
 
-[![Build Status](https://travis-ci.org/Automatic/hedwig-go.svg?branch=master)](https://travis-ci.org/Automatic/hedwig-go)
+[![Build Status](https://travis-ci.com/Automatic/hedwig-go.svg?branch=master)](https://travis-ci.org/Automatic/hedwig-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Automatic/hedwig-go)](https://goreportcard.com/report/github.com/Automatic/hedwig-go)
 [![Godoc](https://godoc.org/github.com/Automatic/hedwig-go?status.svg)](http://godoc.org/github.com/Automatic/hedwig-go)
 [![Coverage](https://img.shields.io/coveralls/automatic/hedwig-go/master.svg?style=flat-square)](https://coveralls.io/r/automatic/hedwig-go)

@@ -4,3 +4,4 @@ Project Leads
 Committers
   Aniruddha Maru <https://github.com/maroux/>
   Ryan Chong <https://github.com/chongr/>
+  Jonathon Klobucar <https://github.com/klobucar>
