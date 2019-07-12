@@ -181,6 +181,12 @@ func (a *awsClient) PublishSNS(ctx context.Context, settings *Settings, messageT
 		}
 	}
 
+	var awsLogLevel aws.LogLevelType
+	if settings.AWSDebugRequestLogEnabled {
+		awsLogLevel = aws.LogDebugWithRequestErrors
+	} else {
+		awsLogLevel = aws.LogOff
+	}
 	_, err := a.sns.PublishWithContext(
 		ctx,
 		&sns.PublishInput{
@@ -189,6 +195,7 @@ func (a *awsClient) PublishSNS(ctx context.Context, settings *Settings, messageT
 			MessageAttributes: attributes,
 		},
 		request.WithResponseReadTimeout(settings.AWSReadTimeoutS),
+		request.WithLogLevel(awsLogLevel),
 	)
 	return errors.Wrap(err, "Failed to publish message to SNS")
 }

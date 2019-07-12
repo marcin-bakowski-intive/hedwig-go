@@ -77,6 +77,9 @@ type Settings struct {
 	// AWS read timeout for publisher
 	AWSReadTimeoutS time.Duration // optional; default: 2 seconds
 
+	// AWS debug request error logs toggle
+	AWSDebugRequestLogEnabled bool
+
 	// CallbackRegistry contains callbacks and message data factories by message type and message version
 	CallbackRegistry *CallbackRegistry
 
