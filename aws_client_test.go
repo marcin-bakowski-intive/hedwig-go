@@ -1182,6 +1182,23 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerFailsOnBadJSON() {
 	suite.NotNil(err)
 }
 
+func (suite *AWSClientTestSuite) TestAWSClient_awsRequestLogLevel() {
+	tests := []struct {
+		AWSDebugRequestLogEnabled bool
+		ExpectedLogLevel          aws.LogLevelType
+	}{
+		{AWSDebugRequestLogEnabled: true, ExpectedLogLevel: aws.LogDebugWithRequestErrors},
+		{AWSDebugRequestLogEnabled: false, ExpectedLogLevel: aws.LogOff},
+	}
+
+	for _, test := range tests {
+		suite.settings.AWSDebugRequestLogEnabled = test.AWSDebugRequestLogEnabled
+		suite.Run(fmt.Sprintf("with AWSDebugRequestLogEnabled=%t", test.AWSDebugRequestLogEnabled), func() {
+			suite.Equal(test.ExpectedLogLevel, getRequestLogLevel(suite.settings))
+		})
+	}
+}
+
 func (suite *AWSClientTestSuite) TestNewAWSClient() {
 	sessionCache := &AWSSessionsCache{}
 
