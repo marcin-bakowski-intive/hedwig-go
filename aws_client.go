@@ -43,10 +43,21 @@ func getSNSTopic(settings *Settings, messageTopic string) string {
 		messageTopic)
 }
 
+func getRequestLogLevel(settings *Settings) aws.LogLevelType {
+	var awsRequestLogLevel aws.LogLevelType
+	if settings.AWSDebugRequestLogEnabled {
+		awsRequestLogLevel = aws.LogDebugWithRequestErrors
+	} else {
+		awsRequestLogLevel = aws.LogOff
+	}
+	return awsRequestLogLevel
+}
+
 // awsClient wrapper struct
 type awsClient struct {
-	sns snsiface.SNSAPI
-	sqs sqsiface.SQSAPI
+	sns             snsiface.SNSAPI
+	sqs             sqsiface.SQSAPI
+	requestLogLevel aws.LogLevelType
 }
 
 func (a *awsClient) processSQSMessage(ctx context.Context, settings *Settings,
@@ -72,7 +83,7 @@ func (a *awsClient) processSQSMessage(ctx context.Context, settings *Settings,
 		_, err := a.sqs.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
 			QueueUrl:      queueURL,
 			ReceiptHandle: queueMessage.ReceiptHandle,
-		})
+		}, request.WithLogLevel(a.requestLogLevel))
 		if err != nil {
 			settings.GetLogger(ctx).Error(err, "Failed to delete message", loggingFields)
 		}
@@ -102,7 +113,7 @@ func (a *awsClient) FetchAndProcessMessages(ctx context.Context,
 	}
 
 	wg := sync.WaitGroup{}
-	out, err := a.sqs.ReceiveMessageWithContext(ctx, input)
+	out, err := a.sqs.ReceiveMessageWithContext(ctx, input, request.WithLogLevel(a.requestLogLevel))
 	if err != nil {
 		return errors.Wrap(err, "failed to receive SQS message")
 	}
@@ -189,6 +200,7 @@ func (a *awsClient) PublishSNS(ctx context.Context, settings *Settings, messageT
 			MessageAttributes: attributes,
 		},
 		request.WithResponseReadTimeout(settings.AWSReadTimeoutS),
+		request.WithLogLevel(a.requestLogLevel),
 	)
 	return errors.Wrap(err, "Failed to publish message to SNS")
 }
@@ -196,7 +208,7 @@ func (a *awsClient) PublishSNS(ctx context.Context, settings *Settings, messageT
 func (a *awsClient) getSQSQueueURL(ctx context.Context, queueName string) (*string, error) {
 	out, err := a.sqs.GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
 		QueueName: &queueName,
-	})
+	}, request.WithLogLevel(a.requestLogLevel))
 	if err != nil {
 		return nil, err
 	}
@@ -267,8 +279,9 @@ func (a *awsClient) messageHandlerLambda(settings *Settings, request *LambdaRequ
 func newAWSClient(sessionCache *AWSSessionsCache, settings *Settings) iAmazonWebServicesClient {
 	awsSession := sessionCache.GetSession(settings)
 	awsClient := awsClient{
-		sns: sns.New(awsSession),
-		sqs: sqs.New(awsSession),
+		sns:             sns.New(awsSession),
+		sqs:             sqs.New(awsSession),
+		requestLogLevel: getRequestLogLevel(settings),
 	}
 	return &awsClient
 }
