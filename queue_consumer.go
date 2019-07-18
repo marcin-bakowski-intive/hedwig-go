@@ -46,10 +46,16 @@ func (c *queueConsumer) ListenForMessages(ctx context.Context, request *ListenRe
 
 // NewQueueConsumer creates a new consumer object used for a queue
 func NewQueueConsumer(sessionCache *AWSSessionsCache, settings *Settings) IQueueConsumer {
+	awsClient := newAWSClient(sessionCache, settings)
+	return NewQueueConsumerFromAwsClient(&awsClient, settings)
+}
+
+// NewQueueConsumerFromClient creates a new consumer object used for a queue
+func NewQueueConsumerFromAwsClient(awsClient *IAmazonWebServicesClient, settings *Settings) IQueueConsumer {
 	settings.initDefaults()
 	return &queueConsumer{
 		consumer: consumer{
-			awsClient: newAWSClient(sessionCache, settings),
+			awsClient: *awsClient,
 			settings:  settings,
 		},
 	}

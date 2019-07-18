@@ -45,6 +45,6 @@ const sqsWaitTimeoutSeconds int64 = 20
 var ErrRetry = errors.New("Retry error")
 
 type consumer struct {
-	awsClient iAmazonWebServicesClient
+	awsClient IAmazonWebServicesClient
 	settings  *Settings
 }

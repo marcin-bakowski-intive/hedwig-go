@@ -20,7 +20,7 @@ type IPublisher interface {
 
 // Publisher handles hedwig publishing for Automatic
 type Publisher struct {
-	awsClient iAmazonWebServicesClient
+	awsClient IAmazonWebServicesClient
 	settings  *Settings
 }
 

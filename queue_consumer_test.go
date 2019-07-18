@@ -131,3 +131,16 @@ func TestNewQueueConsumer(t *testing.T) {
 	iconsumer := NewQueueConsumer(sessionCache, settings)
 	assert.NotNil(t, iconsumer)
 }
+
+func TestNewQueueConsumerFromAwsClient(t *testing.T) {
+	settings := &Settings{
+		AWSRegion:    "us-east-1",
+		AWSAccountID: "1234567890",
+		QueueName:    "dev-myapp",
+	}
+	awsSession := NewAWSSessionsCache()
+	awsClient := newAWSClient(awsSession, settings)
+
+	iconsumer := NewQueueConsumerFromAwsClient(&awsClient, settings)
+	assert.NotNil(t, iconsumer)
+}

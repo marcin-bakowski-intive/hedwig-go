@@ -279,8 +279,8 @@ func (suite *AWSClientTestSuite) TestAWSClient_FetchAndProcessMessages() {
 	}
 	fakeSqs.On("ReceiveMessageWithContext", ctx, expectedReceiveMessageInput, mock.Anything).Return(receiveMessageOutput, nil)
 
-	awsClient := &awsClient{
-		sqs: fakeSqs,
+	awsClient := &AwsClient{
+		Sqs: fakeSqs,
 	}
 	err := awsClient.FetchAndProcessMessages(
 		ctx, suite.settings, 10, 10,
@@ -371,8 +371,8 @@ func (suite *AWSClientTestSuite) TestAWSClient_FetchAndProcessMessagesHookError(
 	}
 	fakeSqs.On("ReceiveMessageWithContext", ctx, expectedReceiveMessageInput, mock.Anything).Return(receiveMessageOutput, nil)
 
-	awsClient := &awsClient{
-		sqs: fakeSqs,
+	awsClient := &AwsClient{
+		Sqs: fakeSqs,
 	}
 	err := awsClient.FetchAndProcessMessages(
 		ctx, suite.settings, 10, 10,
@@ -439,8 +439,8 @@ func (suite *AWSClientTestSuite) TestAWSClient_FetchAndProcessMessagesNoHook() {
 	}
 	fakeSqs.On("ReceiveMessageWithContext", ctx, expectedReceiveMessageInput, mock.Anything).Return(receiveMessageOutput, nil)
 
-	awsClient := &awsClient{
-		sqs: fakeSqs,
+	awsClient := &AwsClient{
+		Sqs: fakeSqs,
 	}
 	err := awsClient.FetchAndProcessMessages(
 		ctx, suite.settings, 10, 10,
@@ -509,8 +509,8 @@ func (suite *AWSClientTestSuite) TestAWSClient_FetchAndProcessMessagesNoDeleteOn
 	message.Metadata.Receipt = *receiveMessageOutput.Messages[0].ReceiptHandle
 	fakeSqs.On("ReceiveMessageWithContext", ctx, expectedReceiveMessageInput, mock.Anything).Return(receiveMessageOutput, nil)
 
-	awsClient := &awsClient{
-		sqs: fakeSqs,
+	awsClient := &AwsClient{
+		Sqs: fakeSqs,
 	}
 	err = awsClient.FetchAndProcessMessages(ctx, suite.settings, 10, 10)
 	// no error is returned here, but we log the error
@@ -544,7 +544,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_FetchAndProcessMessagesNoDeleteOn
 
 func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEvent() {
 	ctx := context.Background()
-	awsClient := &awsClient{}
+	awsClient := &AwsClient{}
 
 	fakeCallback := suite.fakeCallback
 	fakePreProcessHookLambda := &FakePreProcessHookLambda{}
@@ -629,7 +629,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEvent() {
 
 func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEventHookError() {
 	ctx := context.Background()
-	awsClient := &awsClient{}
+	awsClient := &AwsClient{}
 
 	fakeCallback := suite.fakeCallback
 	fakePreProcessHookLambda := &FakePreProcessHookLambda{}
@@ -672,7 +672,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEventHookError() {
 
 func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEventContextCancel() {
 	ctx, cancel := context.WithCancel(context.Background())
-	awsClient := &awsClient{}
+	awsClient := &AwsClient{}
 
 	fakeCallback := suite.fakeCallback
 
@@ -719,7 +719,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEventContextCancel() 
 }
 func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEventNoHook() {
 	ctx := context.Background()
-	awsClient := &awsClient{}
+	awsClient := &AwsClient{}
 	fakeCallback := suite.fakeCallback
 
 	snsRecords := make([]events.SNSEventRecord, 2)
@@ -760,7 +760,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEventCallbackError() 
 	logger := &fakeLogger{}
 	suite.settings.GetLogger = func(_ context.Context) Logger { return logger }
 
-	awsClient := &awsClient{}
+	awsClient := &AwsClient{}
 
 	fakeCallback := suite.fakeCallback
 
@@ -844,8 +844,8 @@ func (suite *AWSClientTestSuite) TestAWSClient_HandleLambdaEventCallbackError() 
 func (suite *AWSClientTestSuite) TestAWSClient_PublishSNS() {
 	ctx := context.Background()
 	fakeSns := &FakeSns{}
-	awsClient := &awsClient{
-		sns: fakeSns,
+	awsClient := &AwsClient{
+		Sns: fakeSns,
 	}
 
 	data := FakeHedwigDataField{
@@ -892,8 +892,8 @@ func (suite *AWSClientTestSuite) TestAWSClient_PublishSNS() {
 func (suite *AWSClientTestSuite) TestAWSClient_PublishSNSError() {
 	ctx := context.Background()
 	fakeSns := &FakeSns{}
-	awsClient := &awsClient{
-		sns: fakeSns,
+	awsClient := &AwsClient{
+		Sns: fakeSns,
 	}
 
 	data := FakeHedwigDataField{
@@ -942,8 +942,8 @@ func (suite *AWSClientTestSuite) TestAWSClient_getSQSQueueURL() {
 	expectedQueueURL := "https://sqs.us-east-1.amazonaws.com/686176732873/" + queueName
 
 	fakeSqs := &FakeSQS{}
-	awsClient := &awsClient{
-		sqs: fakeSqs,
+	awsClient := &AwsClient{
+		Sqs: fakeSqs,
 	}
 
 	expectedInput := &sqs.GetQueueUrlInput{
@@ -974,7 +974,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandler() {
 	fakeCallback := suite.fakeCallback
 	fakePreDeserializeHook := &FakePreDeserializeHook{}
 	suite.settings.PreDeserializeHook = fakePreDeserializeHook.PreDeserializeHook
-	awsClient := awsClient{}
+	awsClient := AwsClient{}
 
 	data := FakeHedwigDataField{
 		VehicleID: "C_1234567890123456",
@@ -1022,7 +1022,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerHookError() {
 	fakeCallback := suite.fakeCallback
 	fakePreDeserializeHook := &FakePreDeserializeHook{}
 	suite.settings.PreDeserializeHook = fakePreDeserializeHook.PreDeserializeHook
-	awsClient := awsClient{}
+	awsClient := AwsClient{}
 
 	data := FakeHedwigDataField{
 		VehicleID: "C_1234567890123456",
@@ -1049,7 +1049,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerNoHook() {
 	assertions := assert.New(suite.T())
 
 	fakeCallback := suite.fakeCallback
-	awsClient := awsClient{}
+	awsClient := AwsClient{}
 
 	data := FakeHedwigDataField{
 		VehicleID: "C_1234567890123456",
@@ -1078,7 +1078,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerNoCallbackRegistry(
 	assertions := assert.New(suite.T())
 
 	fakeCallback := suite.fakeCallback
-	awsClient := awsClient{}
+	awsClient := AwsClient{}
 
 	data := FakeHedwigDataField{
 		VehicleID: "C_1234567890123456",
@@ -1104,7 +1104,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerNoCallbackRegistry(
 func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerFailsOnValidationFailure() {
 	ctx := context.Background()
 	fakeCallback := suite.fakeCallback
-	awsClient := awsClient{}
+	awsClient := AwsClient{}
 
 	data := FakeHedwigDataField{
 		VehicleID: "P_1234567890123456",
@@ -1125,7 +1125,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerFailsOnValidationFa
 
 func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerFailsOnCallbackFailure() {
 	ctx := context.Background()
-	awsClient := awsClient{}
+	awsClient := AwsClient{}
 
 	fakeCallback := suite.fakeCallback
 
@@ -1175,7 +1175,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerFailsOnCallbackFail
 
 func (suite *AWSClientTestSuite) TestAWSClient_messageHandlerFailsOnBadJSON() {
 	ctx := context.Background()
-	awsClient := awsClient{}
+	awsClient := AwsClient{}
 	receipt := uuid.NewV4().String()
 	messageJSON := "bad json-"
 	err := awsClient.messageHandler(ctx, suite.settings, string(messageJSON), receipt, nil)

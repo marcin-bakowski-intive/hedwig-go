@@ -24,8 +24,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// iAmazonWebServicesClient represents an interface to the AWS client
-type iAmazonWebServicesClient interface {
+// IAmazonWebServicesClient represents an interface to the AWS client
+type IAmazonWebServicesClient interface {
 	FetchAndProcessMessages(ctx context.Context, settings *Settings, numMessages uint32, visibilityTimeoutS uint32) error
 	HandleLambdaEvent(ctx context.Context, settings *Settings, snsEvent events.SNSEvent) error
 	PublishSNS(ctx context.Context, settings *Settings, messageTopic string, payload string, headers map[string]string) error
@@ -53,14 +53,14 @@ func getRequestLogLevel(settings *Settings) aws.LogLevelType {
 	return awsRequestLogLevel
 }
 
-// awsClient wrapper struct
-type awsClient struct {
-	sns             snsiface.SNSAPI
-	sqs             sqsiface.SQSAPI
-	requestLogLevel aws.LogLevelType
+// AwsClient wrapper struct
+type AwsClient struct {
+	Sns             snsiface.SNSAPI
+	Sqs             sqsiface.SQSAPI
+	RequestLogLevel aws.LogLevelType
 }
 
-func (a *awsClient) processSQSMessage(ctx context.Context, settings *Settings,
+func (a *AwsClient) processSQSMessage(ctx context.Context, settings *Settings,
 	queueMessage *sqs.Message, queueURL *string, queueName string, wg *sync.WaitGroup) {
 	defer wg.Done()
 	loggingFields := LoggingFields{
@@ -80,10 +80,10 @@ func (a *awsClient) processSQSMessage(ctx context.Context, settings *Settings,
 	err := a.messageHandlerSQS(settings, sqsRequest)
 	switch err {
 	case nil:
-		_, err := a.sqs.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
+		_, err := a.Sqs.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
 			QueueUrl:      queueURL,
 			ReceiptHandle: queueMessage.ReceiptHandle,
-		}, request.WithLogLevel(a.requestLogLevel))
+		}, request.WithLogLevel(a.RequestLogLevel))
 		if err != nil {
 			settings.GetLogger(ctx).Error(err, "Failed to delete message", loggingFields)
 		}
@@ -94,7 +94,7 @@ func (a *awsClient) processSQSMessage(ctx context.Context, settings *Settings,
 	}
 }
 
-func (a *awsClient) FetchAndProcessMessages(ctx context.Context,
+func (a *AwsClient) FetchAndProcessMessages(ctx context.Context,
 	settings *Settings, numMessages uint32, visibilityTimeoutS uint32) error {
 
 	queueName := getSQSQueueName(settings)
@@ -113,7 +113,7 @@ func (a *awsClient) FetchAndProcessMessages(ctx context.Context,
 	}
 
 	wg := sync.WaitGroup{}
-	out, err := a.sqs.ReceiveMessageWithContext(ctx, input, request.WithLogLevel(a.requestLogLevel))
+	out, err := a.Sqs.ReceiveMessageWithContext(ctx, input, request.WithLogLevel(a.RequestLogLevel))
 	if err != nil {
 		return errors.Wrap(err, "failed to receive SQS message")
 	}
@@ -131,7 +131,7 @@ func (a *awsClient) FetchAndProcessMessages(ctx context.Context,
 	return ctx.Err()
 }
 
-func (a *awsClient) processSNSRecord(ctx context.Context, settings *Settings, request *LambdaRequest) error {
+func (a *AwsClient) processSNSRecord(ctx context.Context, settings *Settings, request *LambdaRequest) error {
 	loggingFields := LoggingFields{
 		"message_sns_id": request.EventRecord.SNS.MessageID,
 	}
@@ -152,7 +152,7 @@ func (a *awsClient) processSNSRecord(ctx context.Context, settings *Settings, re
 	return nil
 }
 
-func (a *awsClient) HandleLambdaEvent(ctx context.Context, settings *Settings, snsEvent events.SNSEvent) error {
+func (a *AwsClient) HandleLambdaEvent(ctx context.Context, settings *Settings, snsEvent events.SNSEvent) error {
 	wg, childCtx := errgroup.WithContext(ctx)
 	for i := range snsEvent.Records {
 		req := &LambdaRequest{
@@ -179,7 +179,7 @@ func (a *awsClient) HandleLambdaEvent(ctx context.Context, settings *Settings, s
 }
 
 // PublishSNS handles publishing to AWS SNS
-func (a *awsClient) PublishSNS(ctx context.Context, settings *Settings, messageTopic string, payload string,
+func (a *AwsClient) PublishSNS(ctx context.Context, settings *Settings, messageTopic string, payload string,
 	headers map[string]string) error {
 
 	topic := getSNSTopic(settings, messageTopic)
@@ -192,7 +192,7 @@ func (a *awsClient) PublishSNS(ctx context.Context, settings *Settings, messageT
 		}
 	}
 
-	_, err := a.sns.PublishWithContext(
+	_, err := a.Sns.PublishWithContext(
 		ctx,
 		&sns.PublishInput{
 			TopicArn:          &topic,
@@ -200,22 +200,22 @@ func (a *awsClient) PublishSNS(ctx context.Context, settings *Settings, messageT
 			MessageAttributes: attributes,
 		},
 		request.WithResponseReadTimeout(settings.AWSReadTimeoutS),
-		request.WithLogLevel(a.requestLogLevel),
+		request.WithLogLevel(a.RequestLogLevel),
 	)
 	return errors.Wrap(err, "Failed to publish message to SNS")
 }
 
-func (a *awsClient) getSQSQueueURL(ctx context.Context, queueName string) (*string, error) {
-	out, err := a.sqs.GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
+func (a *AwsClient) getSQSQueueURL(ctx context.Context, queueName string) (*string, error) {
+	out, err := a.Sqs.GetQueueUrlWithContext(ctx, &sqs.GetQueueUrlInput{
 		QueueName: &queueName,
-	}, request.WithLogLevel(a.requestLogLevel))
+	}, request.WithLogLevel(a.RequestLogLevel))
 	if err != nil {
 		return nil, err
 	}
 	return out.QueueUrl, nil
 }
 
-func (a *awsClient) messageHandler(ctx context.Context, settings *Settings, messageBody string, receipt string,
+func (a *AwsClient) messageHandler(ctx context.Context, settings *Settings, messageBody string, receipt string,
 	additionalLoggingFields LoggingFields) error {
 	loggingFields := LoggingFields{
 		"message_body": messageBody,
@@ -259,7 +259,7 @@ func (a *awsClient) messageHandler(ctx context.Context, settings *Settings, mess
 	return message.execCallback(ctx, receipt)
 }
 
-func (a *awsClient) messageHandlerSQS(settings *Settings, request *SQSRequest) error {
+func (a *AwsClient) messageHandlerSQS(settings *Settings, request *SQSRequest) error {
 	loggingFields := LoggingFields{
 		"message_sqs_id": *request.QueueMessage.MessageId,
 	}
@@ -269,19 +269,19 @@ func (a *awsClient) messageHandlerSQS(settings *Settings, request *SQSRequest) e
 	)
 }
 
-func (a *awsClient) messageHandlerLambda(settings *Settings, request *LambdaRequest) error {
+func (a *AwsClient) messageHandlerLambda(settings *Settings, request *LambdaRequest) error {
 	loggingFields := LoggingFields{
 		"message_sns_id": request.EventRecord.SNS.MessageID,
 	}
 	return a.messageHandler(request.Context, settings, request.EventRecord.SNS.Message, "", loggingFields)
 }
 
-func newAWSClient(sessionCache *AWSSessionsCache, settings *Settings) iAmazonWebServicesClient {
+func newAWSClient(sessionCache *AWSSessionsCache, settings *Settings) IAmazonWebServicesClient {
 	awsSession := sessionCache.GetSession(settings)
-	awsClient := awsClient{
-		sns:             sns.New(awsSession),
-		sqs:             sqs.New(awsSession),
-		requestLogLevel: getRequestLogLevel(settings),
+	awsClient := AwsClient{
+		Sns:             sns.New(awsSession),
+		Sqs:             sqs.New(awsSession),
+		RequestLogLevel: getRequestLogLevel(settings),
 	}
 	return &awsClient
 }
