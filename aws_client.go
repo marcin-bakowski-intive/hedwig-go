@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -29,10 +30,70 @@ type iAmazonWebServicesClient interface {
 	FetchAndProcessMessages(ctx context.Context, settings *Settings, numMessages uint32, visibilityTimeoutS uint32) error
 	HandleLambdaEvent(ctx context.Context, settings *Settings, snsEvent events.SNSEvent) error
 	PublishSNS(ctx context.Context, settings *Settings, messageTopic string, payload string, headers map[string]string) error
+	RequeueDLQMessages(ctx context.Context, settings *Settings, numMessages uint32, visibilityTimeoutS uint32) (int, error)
 }
 
 func getSQSQueueName(settings *Settings) string {
 	return fmt.Sprintf("HEDWIG-%s", settings.QueueName)
+}
+
+// redrivePolicy model for AWS SQS RedrivePolicy attribute.
+type redrivePolicy struct {
+	DeadLetterTargetArn string `json:"DeadLetterTargetArn"`
+}
+
+func (a *awsClient) getSQSQueueDlqURL(ctx context.Context, queueURL string) (*string, error) {
+	attributeName := "RedrivePolicy"
+	queueAttrResp, err := a.sqs.GetQueueAttributesWithContext(ctx, &sqs.GetQueueAttributesInput{
+		QueueUrl:       &queueURL,
+		AttributeNames: []*string{&attributeName},
+	}, request.WithLogLevel(a.requestLogLevel))
+	if err != nil {
+		return nil, err
+	}
+	policy := queueAttrResp.Attributes[attributeName]
+	if policy == nil || len(*policy) == 0 {
+		return nil, errors.Errorf("%s attribute is null or empty string", attributeName)
+	}
+
+	jsonData := []byte(*policy)
+	dlqRedrivePolicy := redrivePolicy{}
+	err = json.Unmarshal(jsonData, &dlqRedrivePolicy)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid RedrivePolicy, unable to unmarshal")
+	}
+	parts := strings.Split(dlqRedrivePolicy.DeadLetterTargetArn, ":")
+	dlqQueueName := parts[len(parts)-1]
+
+	return a.getSQSQueueURL(ctx, dlqQueueName)
+}
+
+func (a *awsClient) enqueueSQSMessage(ctx context.Context, settings *Settings,
+	queueMessage *sqs.Message, queueDlqURL *string, queueURL *string) error {
+	loggingFields := LoggingFields{
+		"message_sqs_id": *queueMessage.MessageId,
+		"queue_url":      queueURL,
+		"queue_dlq_url":  queueDlqURL,
+	}
+	sendMessageInput := sqs.SendMessageInput{
+		QueueUrl:          queueURL,
+		MessageBody:       queueMessage.Body,
+		MessageAttributes: queueMessage.MessageAttributes,
+	}
+	settings.GetLogger(ctx).Info("enqueue message from DLQ", loggingFields)
+
+	_, err := a.sqs.SendMessageWithContext(ctx, &sendMessageInput, request.WithLogLevel(a.requestLogLevel))
+	if err != nil {
+		return err
+	}
+	_, err = a.sqs.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
+		QueueUrl:      queueDlqURL,
+		ReceiptHandle: queueMessage.ReceiptHandle,
+	}, request.WithLogLevel(a.requestLogLevel))
+	if err != nil {
+		settings.GetLogger(ctx).Error(err, "Failed to delete message from DLQ", loggingFields)
+	}
+	return err
 }
 
 func getSNSTopic(settings *Settings, messageTopic string) string {
@@ -129,6 +190,46 @@ func (a *awsClient) FetchAndProcessMessages(ctx context.Context,
 	wg.Wait()
 	// if context was canceled, signal appropriately
 	return ctx.Err()
+}
+
+func (a *awsClient) RequeueDLQMessages(ctx context.Context,
+	settings *Settings, numMessages uint32, visibilityTimeoutS uint32) (int, error) {
+
+	queueName := getSQSQueueName(settings)
+	queueURL, err := a.getSQSQueueURL(ctx, queueName)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get SQS Queue URL")
+	}
+	dlqQueueUrl, err := a.getSQSQueueDlqURL(ctx, *queueURL)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get SQS DLQ Queue URL")
+	}
+	settings.GetLogger(ctx).Info("Found queue URLs", LoggingFields{
+		"queue_url":     *queueURL,
+		"dlq_queue_url": *dlqQueueUrl,
+	})
+
+	input := &sqs.ReceiveMessageInput{
+		MaxNumberOfMessages: aws.Int64(int64(numMessages)),
+		QueueUrl:            dlqQueueUrl,
+		WaitTimeSeconds:     aws.Int64(sqsRequeueWaitTimeoutSeconds),
+	}
+	if visibilityTimeoutS != 0 {
+		input.VisibilityTimeout = aws.Int64(int64(visibilityTimeoutS))
+	}
+
+	out, err := a.sqs.ReceiveMessageWithContext(ctx, input, request.WithLogLevel(a.requestLogLevel))
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to receive SQS messages")
+	}
+	settings.GetLogger(ctx).Info(fmt.Sprintf("Found %d messages to enqueue", len(out.Messages)), nil)
+	for i := range out.Messages {
+		err = a.enqueueSQSMessage(ctx, settings, out.Messages[i], dlqQueueUrl, queueURL)
+		if err != nil {
+			return 0, errors.Wrap(err, "failed to enqueue SQS message")
+		}
+	}
+	return len(out.Messages), nil
 }
 
 func (a *awsClient) processSNSRecord(ctx context.Context, settings *Settings, request *LambdaRequest) error {
