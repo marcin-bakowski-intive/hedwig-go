@@ -90,10 +90,10 @@ func (fa *FakeAWSClient) FetchAndProcessMessages(ctx context.Context, settings *
 }
 
 func (fa *FakeAWSClient) RequeueDLQMessages(ctx context.Context, settings *Settings, numMessages uint32,
-	visibilityTimeoutS uint32) (int, error) {
+	visibilityTimeoutS uint32) error {
 
 	args := fa.Called(ctx, settings, numMessages, visibilityTimeoutS)
-	return 0, args.Error(0)
+	return args.Error(0)
 }
 
 func (fa *FakeAWSClient) HandleLambdaEvent(ctx context.Context, settings *Settings, snsEvent events.SNSEvent) error {
@@ -1039,6 +1039,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_getSQSQueueDlqURL_errorNoPolicy()
 	fakeSqs.On("GetQueueAttributesWithContext", ctx, &expectedInputQueueAttributes, mock.Anything).Return(&outputQueueAttributes, nil)
 
 	_, err := awsClient.getSQSQueueDlqURL(ctx, queueURL)
+	suite.NotNil(err)
 	suite.EqualError(fmt.Errorf("%s", err), "RedrivePolicy attribute is null or empty string")
 	fakeSqs.AssertExpectations(suite.T())
 }
@@ -1066,6 +1067,7 @@ func (suite *AWSClientTestSuite) TestAWSClient_getSQSQueueDlqURL_invalidJsonPoli
 	fakeSqs.On("GetQueueAttributesWithContext", ctx, &expectedInputQueueAttributes, mock.Anything).Return(&outputQueueAttributes, nil)
 
 	_, err := awsClient.getSQSQueueDlqURL(ctx, queueURL)
+	suite.NotNil(err)
 	suite.Contains(err.Error(), "invalid RedrivePolicy, unable to unmarshal")
 	fakeSqs.AssertExpectations(suite.T())
 }
@@ -1169,11 +1171,11 @@ func (suite *AWSClientTestSuite) TestAWSClient_RequeueDLQMessages() {
 	fakeSqs.On("GetQueueUrlWithContext", ctx, &expectedInputQueueUrl, mock.Anything).Return(&outputQueueUrl, nil)
 	fakeSqs.On("SendMessageWithContext", ctx, &sendMessageInput, mock.Anything).Return(&sendMessageOutput, nil)
 	fakeSqs.On("DeleteMessageWithContext", ctx, &deleteMessageInput, mock.Anything).Return(&deleteMessageOutput, nil)
-	fakeSqs.On("ReceiveMessageWithContext", ctx, &expectedReceiveMessageInput, mock.Anything).Return(&expectedReceiveMessageOutput, nil)
+	fakeSqs.On("ReceiveMessageWithContext", ctx, &expectedReceiveMessageInput, mock.Anything).Times(1).Return(&expectedReceiveMessageOutput, nil)
+	fakeSqs.On("ReceiveMessageWithContext", ctx, &expectedReceiveMessageInput, mock.Anything).Times(1).Return(&sqs.ReceiveMessageOutput{}, nil)
 
-	num, err := awsClient.RequeueDLQMessages(ctx, suite.settings, 10, 10)
+	err := awsClient.RequeueDLQMessages(ctx, suite.settings, 10, 10)
 	suite.NoError(err)
-	suite.Equal(num, 1)
 	fakeSqs.AssertExpectations(suite.T())
 }
 

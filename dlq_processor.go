@@ -2,6 +2,7 @@ package hedwig
 
 import (
 	"context"
+	"github.com/pkg/errors"
 )
 
 const sqsRequeueWaitTimeoutSeconds int64 = 5
@@ -10,7 +11,6 @@ const sqsRequeueWaitTimeoutSeconds int64 = 5
 type RequeueRequest struct {
 	NumMessages        uint32 // default 1
 	VisibilityTimeoutS uint32 // defaults to queue configuration
-	LoopCount          uint32 // defaults to infinite loops
 }
 
 // IPublisher handles all publish related functions
@@ -29,19 +29,11 @@ func (p *DLQProcessor) Requeue(ctx context.Context, request *RequeueRequest) err
 	if request.NumMessages == 0 {
 		request.NumMessages = 1
 	}
-
-	for i := uint32(0); request.LoopCount == 0 || i < request.LoopCount; i++ {
-		messagesNum, err := p.awsClient.RequeueDLQMessages(
-			ctx, p.settings, request.NumMessages, request.VisibilityTimeoutS,
-		)
-		if err != nil {
-			return err
-		}
-		if messagesNum == 0 {
-			return nil
-		}
+	if request.NumMessages < 1 || request.NumMessages > 10 {
+		return errors.Errorf("request.NumMessages=%d is not valid. Allowed values: <1-10>", request.NumMessages)
 	}
-	return nil
+
+	return p.awsClient.RequeueDLQMessages(ctx, p.settings, request.NumMessages, request.VisibilityTimeoutS)
 }
 
 // NewPublisher creates a new Publisher
